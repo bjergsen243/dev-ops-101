@@ -1,0 +1,122 @@
+version: '3'
+services:
+  redis:
+    image: 'redis:6-alpine'
+    container_name: docker-redis
+    networks:
+      - default
+    ports:
+      - 16380:6379
+    volumes:
+      - ./data/redis:/data
+    logging:
+      driver: 'json-file'
+      options:
+        compress: 'true'
+        max-file: '10'
+        max-size: '50m'
+
+  zookeeper:
+    image: 'bitnami/zookeeper:3.6.2'
+    container_name: docker-zookeeper
+    networks:
+      - default
+    ports:
+      - 12183:2181
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    volumes:
+      - ./data/zookeeper:/var/lib/zookeeper
+    logging:
+      driver: 'json-file'
+      options:
+        compress: 'true'
+        max-file: '10'
+        max-size: '50m'
+
+  kafka:
+    image: 'bitnami/kafka:2.6.0'
+    container_name: docker-kafka
+    networks:
+      - default
+    ports:
+      - 19093:19093
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:19093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:19093
+      - KAFKA_INTER_BROKER_LISTENER_NAME=CLIENT
+      - KAFKA_CFG_REPLICA_FETCH_MAX_BYTES=10485760
+      - KAFKA_CFG_MESSAGE_MAX_BYTES=10485760
+    depends_on:
+      - zookeeper
+    volumes:
+      - ./data/kafka:/bitnami/kafka
+    logging:
+      driver: 'json-file'
+      options:
+        compress: 'true'
+        max-file: '10'
+        max-size: '50m'
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop
+    container_name: docker-kafdrop
+    networks:
+      - default
+    restart: 'no'
+    ports:
+      - 19000:9000
+    environment:
+      KAFKA_BROKERCONNECT: 'kafka:9092'
+      JVM_OPTS: '-Xms160M -Xmx480M -Xss1800K -XX:-TieredCompilation -XX:+UseStringDeduplication -noverify'
+    depends_on:
+      - kafka
+    logging:
+      driver: 'json-file'
+      options:
+        compress: 'true'
+        max-file: '10'
+        max-size: '50m'
+
+  mongo-replica-setup:
+    container_name: docker-mongo-replica-setup
+    image: mongo:4.4
+    restart: on-failure
+    networks:
+      - default
+    volumes:
+      - ./scripts/mongo-rs-init.sh:/scripts/mongo-rs-init.sh
+    entrypoint: [ "bash", "/scripts/rs-init.sh" ]
+    depends_on:
+      - mongo1
+
+  mongo1:
+    container_name: docker-mongo1
+    image: mongo:4.4
+    volumes:
+      - ./data/mongo1:/data/db
+    networks:
+      - default
+    ports:
+      - 27017:27017
+    expose:
+      - 27017
+    restart: always
+    entrypoint: [ "/usr/bin/mongod", "--replSet", "rs0", "--bind_ip_all" ]
+
+  postgres:
+    container_name: docker-postgres
+    image: postgres:14.1-alpine
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+    ports:
+      - 5432:5432
+networks:
+  default:
+    driver: bridge

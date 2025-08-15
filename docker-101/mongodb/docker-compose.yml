@@ -1,0 +1,90 @@
+version: "3"
+services:
+  mongo-replica:
+    container_name: mongo-replica
+    image: mongo:4.4
+    restart: on-failure
+    networks:
+      - mongodb-net
+    volumes:
+      - ./rs-init.sh:/rs-init.sh
+      - ./.env:/.env
+    entrypoint: [ "bash", "/rs-init.sh" ]
+    env_file:
+      - .env
+    depends_on:
+      - mongodb1
+      - mongodb2
+      - mongodb3
+  mongodb1:
+    container_name: mongodb1
+    image: mongo:4.4
+    env_file:
+      - .env
+    volumes:
+      - "${MOUNT_FOLDER:-./data}/mongodb1:/data/db"
+    networks:
+      - mongodb-net
+    ports:
+      - 27017:27017
+    expose:
+      - 27017
+    restart: always
+    entrypoint:
+      [
+        "/usr/bin/mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all"
+      ]
+    healthcheck:
+      test: echo 'db.runCommand({serverStatus:1}).ok' | grep 1
+      interval: 30s
+      start_period: 60s
+  mongodb2:
+    container_name: mongodb2
+    image: mongo:4.4
+    env_file:
+      - .env
+    volumes:
+      - "${MOUNT_FOLDER:-./data}/mongodb2:/data/db"
+    networks:
+      - mongodb-net
+    ports:
+      - 27018:27017
+    restart: always
+    entrypoint:
+      [
+        "/usr/bin/mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all"
+      ]
+  mongodb3:
+    container_name: mongodb3
+    image: mongo:4.4
+    env_file:
+      - .env
+    volumes:
+      - "${MOUNT_FOLDER:-./data}/mongodb3:/data/db"
+    networks:
+      - mongodb-net
+    ports:
+      - 27019:27017
+    restart: always
+    entrypoint:
+      [
+        "/usr/bin/mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all"
+      ]
+networks:
+  mongodb-net:
+    driver: bridge
+volumes:
+  mongodb1:
+  mongodb2:
+  mongodb3:
+
+
